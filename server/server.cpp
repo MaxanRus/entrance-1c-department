@@ -64,7 +64,7 @@ void Client::SendMessage(char* data, uint32_t length) {
 }
 */
 
-void PushTask(std::unique_ptr<Task> task) {
+void Client::PushTask(std::unique_ptr<Task> task) {
   bool tasks_performered_ = !task_queue.empty();
   task_queue.push_back(std::move(task));
 
@@ -74,28 +74,31 @@ void PushTask(std::unique_ptr<Task> task) {
 }
 
 void Client::DoTask() {
-  task_queue.front().Apply(*this);
+  task_queue.front()->Apply(*this);
+  /*
   task_queue.pop_front();
   if (!task_queue.empty()) {
     DoTask();
   }
+   */
 }
 
 void Client::AsyncReadHeader() {
   socket_.async_read_some(
-      reading_.GetLengthBuffer(),
+      boost::asio::buffer(&reading_size_, kSizeHeader),
       std::bind(&Client::OnReadHeader, shared_from_this(), _1, _2));
 }
 
 void Client::AsyncReadBody() {
   socket_.async_read_some(
-      reading_.GetBodyBuffer(reading_.Length()),
+      boost::asio::buffer(reading_message_.get(), reading_size_),
       std::bind(&Client::OnReadBody, shared_from_this(), _1, _2));
 }
 
-void Client::AsyncSend(char* data, uint32_t length) {
-  async_write(socket_, boost::asio::buffer(data, length),
-              std::bind(&Client::OnSend, shared_from_this(), _1, _2));
+void Client::AsyncSend(const char* data, uint32_t length) {
+  sending_message_ = data;
+  sending_size_ = length;
+  AsyncSendHeader();
   /*
 auto& message = writing_queue_.front();
 LOG(INFO) << "Sending " << (string_view)message;
@@ -109,10 +112,14 @@ if (message.IsMonolit()) {
 */
 }
 
+void Client::AsyncSendHeader() {
+  async_write(socket_, boost::asio::buffer(&sending_size_, kSizeHeader),
+              std::bind(&Client::OnSendHeader, shared_from_this(), _1, _2));
+}
+
 void Client::AsyncSendBody() {
-  auto& message = writing_queue_.front();
-  async_write(socket_, message.GetBodyBuffer(),
-              std::bind(&Client::OnSend, shared_from_this(), _1, _2));
+  async_write(socket_, boost::asio::buffer(sending_message_, sending_size_),
+              std::bind(&Client::OnSendBody, shared_from_this(), _1, _2));
 }
 
 void LogError(const boost::system::error_code& error) {
@@ -143,15 +150,8 @@ void Client::OnReadBody(const boost::system::error_code& error,
     LogError(error);
     return;
   }
-  handler_receiving_message_(std::move(reading_));
+  handler_receiving_message_(std::string(reading_message_.get(), reading_size_));
   AsyncReadHeader();
-}
-
-void Client::OnSendBody(const boost::system::error_code& error,
-                    size_t bytes_transferred) {
-  if (error) {
-    LOG(ERROR) << "Error: error while send" << error.what();
-  }
 }
 
 void Client::OnSendHeader(const boost::system::error_code& error,
@@ -160,6 +160,18 @@ void Client::OnSendHeader(const boost::system::error_code& error,
     LOG(ERROR) << "Error: error while send" << error.what();
   }
   AsyncSendBody();
+}
+
+void Client::OnSendBody(const boost::system::error_code& error,
+                        size_t bytes_transferred) {
+  if (error) {
+    LOG(ERROR) << "Error: error while send" << error.what();
+  }
+  LOG(INFO) << "OnSendBody";
+  task_queue.pop_front();
+  if (!task_queue.empty()) {
+    DoTask();
+  }
 }
 
 Server::Server(const std::string& host, int port)
@@ -188,3 +200,16 @@ void Server::AcceptClient(const boost::system::error_code& error,
       std::make_shared<Client>(io_context_, std::move(socket)));
 }
 
+void MessageData::Apply(Client& client) { client.AsyncSend(data, length); }
+
+void MessageString::Apply(Client& client) {
+  client.AsyncSend(data.c_str(), data.length());
+}
+
+void Function::Apply(Client& client) { function(client); }
+
+Task::~Task() {}
+
+void Client::Stop() {
+  socket_.close();
+}

@@ -7,6 +7,7 @@
 #include <variant>
 
 class Client;
+
 class Server;
 
 /*
@@ -107,34 +108,38 @@ class Message {
 */
 
 struct Task {
-  virtual void Apply(Client&);
+  virtual void Apply(Client&) = 0;
   virtual ~Task() = 0;
 };
 
 struct MessageData : Task {
-  virtual void Apply(Client& client) { client.AsyncSend(data, length); }
+  MessageData(const char* data, uint32_t length) : data(data), length(length) {}
 
-  char* data;
+  void Apply(Client& client) override;
+
+  const char* data;
   uint32_t length;
 };
 
 struct MessageString : Task {
-  virtual void Apply(Client& client) {
-    client.AsyncSend(data.c_str(), data.length());
-  }
+  explicit MessageString(std::string data) : data(std::move(data)) {}
+
+  void Apply(Client& client) override;
 
   std::string data;
 };
 
 struct Function : Task {
-  virtual void Apply(Client& client) { function(client); }
+  Function(std::function<void(Client&)> function) : function(std::move(function)) {}
+
+  void Apply(Client& client) override;
 
   std::function<void(Client&)> function;
 };
 
 namespace handlers {
-  using HandlerAcceptingClient = std::function<void(std::shared_ptr<Client>)>;
-  using HandlerReceivingMessage = std::function<void(Message)>;
+using HandlerAcceptingClient = std::function<void(std::shared_ptr<Client>)>;
+using HandlerReceivingMessage = std::function<void(std::string)>;
 }  // namespace handlers
 
 std::shared_ptr<Client> ConnectToServer(boost::asio::io_context&,
@@ -159,6 +164,7 @@ class Client : public std::enable_shared_from_this<Client> {
 
   void AsyncReadHeader();
   void AsyncReadBody();
+  void AsyncSend(const char* data, uint32_t length);
   void AsyncSendHeader();
   void AsyncSendBody();
 
@@ -168,8 +174,11 @@ class Client : public std::enable_shared_from_this<Client> {
                   size_t bytes_transferred);
   void OnSendHeader(const boost::system::error_code& error,
                     size_t bytes_transferred);
-  void OnSendHeader(const boost::system::error_code& error,
-                    size_t bytes_transferred);
+  void OnSendBody(const boost::system::error_code& error,
+                  size_t bytes_transferred);
+
+  static constexpr uint32_t kSizeHeader = sizeof(uint32_t);
+  static constexpr uint32_t kMaxSizeBody = 1024;
 
  private:
   boost::asio::io_context& io_context_;
@@ -177,9 +186,21 @@ class Client : public std::enable_shared_from_this<Client> {
 
   // std::deque<Message> writing_queue_;
   std::deque<std::unique_ptr<Task>> task_queue;
+
+  uint32_t sending_size_;
+  const char* sending_message_ = nullptr;
+
+  uint32_t reading_size_;
+  std::unique_ptr<char[]> reading_message_ = std::make_unique<char[]>(kMaxSizeBody);
+  /*
   Message reading_;
+   */
 
   handlers::HandlerReceivingMessage handler_receiving_message_;
+
+  friend class MessageData;
+
+  friend class MessageString;
 };
 
 class Server {

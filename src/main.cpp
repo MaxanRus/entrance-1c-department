@@ -9,8 +9,10 @@ INITIALIZE_EASYLOGGINGPP
 int main() {
   el::Loggers::addFlag(el::LoggingFlag::ColoredTerminalOutput);
 
+  /*
   Message m("0123");
   LOG(INFO) << m.Length();
   LOG(INFO) << (std::string_view)m;
+   */
   return 0;
 }

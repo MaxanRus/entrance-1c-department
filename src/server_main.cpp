@@ -11,20 +11,21 @@ using File = bio::mapped_file;
 
 File file;
 
-void GetMessage(std::weak_ptr<Client> client, Message s) {
-  LOG(INFO) << "Server recv message: " << (std::string_view)s;
+void GetMessage(std::weak_ptr<Client> client, std::string message) {
+  LOG(INFO) << "Server recv message: " << message;
 
   namespace bio = boost::iostreams;
-  std::string_view message(s);
   file.open(std::string(message.substr(4, message.length() - 4)),
                         boost::iostreams::mapped_file::readonly);
 
-  std::string test(file.const_data(), file.const_data() + file.size());
-  LOG(INFO) << test;
+  // std::string test(file.const_data(), file.const_data() + file.size());
+  LOG(INFO) << std::string_view(file.const_data(), file.size());
 
   // client.lock()->SendMessage(std::to_string(test.length()));
-  client.lock()->SendMessage(const_cast<char*>(file.const_data()), file.size());
-  client.lock()->SendMessage(test);
+  // client.lock()->SendMessage(const_cast<char*>(file.const_data()), file.size());
+  // client.lock()->SendMessage(test);
+  client.lock()->PushTask(std::make_unique<MessageString>(std::to_string(file.size())));
+  client.lock()->PushTask(std::make_unique<MessageData>(file.const_data(), file.size()));
 }
 
 void NewClient(std::shared_ptr<Client> c) {
