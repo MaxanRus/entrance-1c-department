@@ -93,7 +93,6 @@ class Client : public std::enable_shared_from_this<Client> {
 
   uint32_t reading_size_;
   std::array<char, kMaxSizeBody> reading_message_;
-  // std::unique_ptr<char[]> reading_message_ = std::make_unique<char[]>(kMaxSizeBody);
 
   handlers::HandlerReceivingMessage handler_receiving_message_;
 
