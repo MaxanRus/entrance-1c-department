@@ -15,6 +15,7 @@ void GetMessage(std::weak_ptr<Client> client, std::string message) {
   LOG(INFO) << "Server recv message: " << message;
 
   namespace bio = boost::iostreams;
+  file.close();
   file.open(std::string(message.substr(4, message.length() - 4)),
                         boost::iostreams::mapped_file::readonly);
 

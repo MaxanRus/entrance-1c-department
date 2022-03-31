@@ -35,9 +35,12 @@ void PrintToFile(std::weak_ptr<Client> client, File file, size_t offset, std::st
   LOG(INFO) << msg << std::endl;
 
   std::copy(msg.begin(), msg.end(), file.data() + offset);
-  client.lock()->SetHandlerReceivingMessage(
-      std::bind(&PrintToFile, client, file, offset + msg.length(), _1));
-  client.lock()->PushTask(std::make_unique<Function>([](Client& client) { client.Stop(); }));
+  if (offset + msg.length() == file.size()) {
+    client.lock()->PushTask(std::make_unique<Function>([](Client& client) { client.Stop(); }));
+  } else {
+    client.lock()->SetHandlerReceivingMessage(
+        std::bind(&PrintToFile, client, file, offset + msg.length(), _1));
+  }
 }
 
 void GetLengthFile(std::weak_ptr<Client> client, std::string msg) {
@@ -46,7 +49,7 @@ void GetLengthFile(std::weak_ptr<Client> client, std::string msg) {
   LOG(INFO) << msg;
 
   LOG(INFO) << "size of file: " << msg;
-  file = CreateResultFile("recv.txt", std::atoi(msg.data()));
+  file = CreateResultFile("recv2.txt", std::atoi(msg.data()));
 
   client.lock()->SetHandlerReceivingMessage(
       std::bind(&PrintToFile, client, file, 0, _1));
@@ -63,7 +66,7 @@ int main() {
   client->SetHandlerReceivingMessage(std::bind(&GetLengthFile, client, _1));
   client->Start();
 
-  client->PushTask(std::make_unique<MessageString>("get test.txt"));
+  client->PushTask(std::make_unique<MessageString>("get Plays"));
 
   io.run();
 }

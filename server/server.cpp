@@ -91,7 +91,7 @@ void Client::AsyncReadHeader() {
 
 void Client::AsyncReadBody() {
   socket_.async_read_some(
-      boost::asio::buffer(reading_message_.get(), reading_size_),
+      boost::asio::buffer(reading_message_.get(), std::min(kMaxSizeBody, reading_size_)),
       std::bind(&Client::OnReadBody, shared_from_this(), _1, _2));
 }
 
@@ -118,7 +118,7 @@ void Client::AsyncSendHeader() {
 }
 
 void Client::AsyncSendBody() {
-  async_write(socket_, boost::asio::buffer(sending_message_, sending_size_),
+  async_write(socket_, boost::asio::buffer(sending_message_, std::min(kMaxSizeBody, sending_size_)),
               std::bind(&Client::OnSendBody, shared_from_this(), _1, _2));
 }
 
@@ -150,8 +150,13 @@ void Client::OnReadBody(const boost::system::error_code& error,
     LogError(error);
     return;
   }
-  handler_receiving_message_(std::string(reading_message_.get(), reading_size_));
-  AsyncReadHeader();
+  handler_receiving_message_(std::string(reading_message_.get(), std::min(kMaxSizeBody, reading_size_)));
+  if (reading_size_ > kMaxSizeBody) {
+    reading_size_ -= kMaxSizeBody;
+    AsyncReadBody();
+  } else {
+    AsyncReadHeader();
+  }
 }
 
 void Client::OnSendHeader(const boost::system::error_code& error,
@@ -164,13 +169,20 @@ void Client::OnSendHeader(const boost::system::error_code& error,
 
 void Client::OnSendBody(const boost::system::error_code& error,
                         size_t bytes_transferred) {
+  LOG(INFO) << "transferred: " << bytes_transferred;
   if (error) {
     LOG(ERROR) << "Error: error while send" << error.what();
   }
   LOG(INFO) << "OnSendBody";
-  task_queue.pop_front();
-  if (!task_queue.empty()) {
-    DoTask();
+  if (sending_size_ > kMaxSizeBody) {
+    sending_message_ += kMaxSizeBody;
+    sending_size_ -= kMaxSizeBody;
+    AsyncSendBody();
+  } else {
+    task_queue.pop_front();
+    if (!task_queue.empty()) {
+      DoTask();
+    }
   }
 }
 
@@ -200,7 +212,9 @@ void Server::AcceptClient(const boost::system::error_code& error,
       std::make_shared<Client>(io_context_, std::move(socket)));
 }
 
-void MessageData::Apply(Client& client) { client.AsyncSend(data, length); }
+void MessageData::Apply(Client& client) {
+  client.AsyncSend(data, length);
+}
 
 void MessageString::Apply(Client& client) {
   client.AsyncSend(data.c_str(), data.length());
