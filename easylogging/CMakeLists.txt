@@ -1,0 +1,3 @@
+set(EASYLOGGING_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
+
+ADD_LIBRARY(easyloggingpp STATIC easylogging++.cc)
