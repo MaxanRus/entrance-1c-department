@@ -5,6 +5,7 @@
 #include <deque>
 #include <memory>
 #include <variant>
+#include <array>
 
 class Client;
 
@@ -85,13 +86,14 @@ class Client : public std::enable_shared_from_this<Client> {
   boost::asio::io_context& io_context_;
   boost::asio::ip::tcp::socket socket_;
 
-  std::deque<std::unique_ptr<Task>> task_queue;
+  std::deque<std::unique_ptr<Task>> task_queue_;
 
   uint32_t sending_size_;
   const char* sending_message_ = nullptr;
 
   uint32_t reading_size_;
-  std::unique_ptr<char[]> reading_message_ = std::make_unique<char[]>(kMaxSizeBody);
+  std::array<char, kMaxSizeBody> reading_message_;
+  // std::unique_ptr<char[]> reading_message_ = std::make_unique<char[]>(kMaxSizeBody);
 
   handlers::HandlerReceivingMessage handler_receiving_message_;
 

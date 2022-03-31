@@ -10,8 +10,9 @@ INITIALIZE_EASYLOGGINGPP
 
 namespace bio = boost::iostreams;
 namespace bfs = boost::filesystem;
+using File = bio::mapped_file;
 
-bio::mapped_file CreateResultFile(const std::string& path, size_t new_length) {
+bio::mapped_file CreateResultFileAndTranslateToMemory(const std::string& path, size_t new_length) {
   bio::mapped_file file;
   bio::mapped_file_params params;
 
@@ -26,8 +27,6 @@ bio::mapped_file CreateResultFile(const std::string& path, size_t new_length) {
   return file;
 }
 
-using File = bio::mapped_file;
-
 void PrintToFile(std::weak_ptr<Client> client, File file, size_t offset, std::string msg) {
   using namespace std::placeholders;
 
@@ -37,18 +36,28 @@ void PrintToFile(std::weak_ptr<Client> client, File file, size_t offset, std::st
     file.close();
   } else {
     client.lock()->SetHandlerReceivingMessage(
-        [client, file, new_offset = offset + msg.length()](auto && message) { return PrintToFile(client, file, new_offset, std::forward<decltype(message)>(message)); });
+        [client, file, new_offset = offset + msg.length()](auto&& message) {
+          return PrintToFile(client,
+                             file,
+                             new_offset,
+                             std::forward<decltype(message)>(message));
+        });
   }
 }
 
-void GetLengthFile(std::weak_ptr<Client> client, std::string result_filename, std::string msg) {
+void GetLengthFile(std::weak_ptr<Client> client, const std::string& result_filename, std::string msg) {
   using namespace std::placeholders;
   LOG(INFO) << "Client receiving message with a length " << msg.length();
 
-  File file = CreateResultFile(result_filename, std::atoi(msg.data()));
+  File file = CreateResultFileAndTranslateToMemory(result_filename, std::atoi(msg.data()));
 
   client.lock()->SetHandlerReceivingMessage(
-      [client, file](auto && message) { return PrintToFile(client, file, 0, std::forward<decltype(message)>(message)); });
+      [client, file](auto&& message) {
+        return PrintToFile(client,
+                           file,
+                           0,
+                           std::forward<decltype(message)>(message));
+      });
 }
 
 int main(int argc, char* argv[]) {
@@ -56,7 +65,8 @@ int main(int argc, char* argv[]) {
   int port = 6666;
   std::string filename;
   if (argc == 1) {
-    LOG(ERROR) << "Please run application [./Client file_name] or [./Client host file_name] or [./Client host port file_name]";
+    LOG(ERROR)
+        << "Please run application [./Client file_name] or [./Client host file_name] or [./Client host port file_name]";
     return 0;
   } else if (argc == 2) {
     filename = argv[1];
@@ -76,7 +86,11 @@ int main(int argc, char* argv[]) {
 
   auto client = ConnectToServer(io, host, port);
 
-  client->SetHandlerReceivingMessage([client, &filename](auto && message) { return GetLengthFile(client, "download_" + filename, std::forward<decltype(message)>(message)); });
+  client->SetHandlerReceivingMessage([client, &filename](auto&& message) {
+    return GetLengthFile(client,
+                         "download_" + filename,
+                         std::forward<decltype(message)>(message));
+  });
   client->Start();
 
   client->PushTask(std::make_unique<MessageString>("get " + filename));
