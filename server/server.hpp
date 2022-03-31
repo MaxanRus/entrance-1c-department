@@ -10,103 +10,6 @@ class Client;
 
 class Server;
 
-/*
-class Message {
- public:
-  Message() {
-    auto q = std::make_unique<char[]>(kSizeHeader + kMaxSizeBody);
-    *reinterpret_cast<uint32_t*>(q.get()) = 0;
-    data_ = std::move(q);
-  }
-
-  explicit Message(const std::string& text) {
-    auto q = std::make_unique<char[]>(kSizeHeader + kMaxSizeBody);
-    *reinterpret_cast<uint32_t*>(q.get()) = (uint32_t)text.length();
-    std::copy(text.begin(), text.end(), ((char*)q.get()) + kSizeHeader);
-    data_ = std::move(q);
-  }
-
-  Message(char* data, uint32_t length) {
-    data_ = NotMonolithData{data, length};
-  }
-
-  Message(Message&& another) {
-    data_ = std::move(another.data_);
-    // another.data_ = NotMonolithData{nullptr, 0};
-    auto q = std::make_unique<char[]>(kSizeHeader + kMaxSizeBody);
-    *reinterpret_cast<uint32_t*>(q.get()) = 0;
-    another.data_ = std::move(q);
-  }
-
-  Message& operator=(const Message& another) = delete;
-
-  Message& operator=(Message&& another) {
-    std::swap(another.data_, data_);
-    return *this;
-  }
-
-  explicit operator const std::string_view() {
-    return std::string_view(GetData(), Length());
-  }
-
-  explicit operator std::string() {
-    return std::string(this->operator const std::string_view());
-  }
-
-  boost::asio::mutable_buffer GetCurrentBuffer() {
-    return boost::asio::buffer(GetLength(), kSizeHeader + Length());
-  }
-
-  boost::asio::mutable_buffer GetLengthBuffer() {
-    return boost::asio::buffer(GetLength(), kSizeHeader);
-  }
-
-  boost::asio::mutable_buffer GetBodyBuffer() {
-    return boost::asio::buffer(GetData(), Length());
-  }
-
-  boost::asio::mutable_buffer GetBodyBuffer(size_t length) {
-    return boost::asio::buffer(GetData(), length);
-  }
-
-  char* GetLength() {
-    if (data_.index() == 0) {
-      return reinterpret_cast<char*>(std::get<NotMonolithData>(data_).length);
-    } else {
-      return reinterpret_cast<char*>(std::get<MonolithData>(data_).get());
-    }
-  }
-
-  char* GetData() {
-    if (data_.index() == 0) {
-      return std::get<NotMonolithData>(data_).data;
-    } else {
-      return reinterpret_cast<char*>(std::get<MonolithData>(data_).get()) +
-             kSizeHeader;
-    }
-  }
-
-  bool IsMonolit() const { return data_.index() == 1; }
-
-  size_t Length() {
-    LOG(GetLength());
-    return static_cast<size_t>(*reinterpret_cast<uint32_t*>(GetLength()));
-  }
-
-  static constexpr uint32_t kSizeHeader = sizeof(uint32_t);
-  static constexpr uint32_t kMaxSizeBody = 1024;
- private:
-  struct NotMonolithData {
-    char* data;
-    uint32_t length;
-  };
-
-  using MonolithData = std::unique_ptr<char[]>;
-
-  std::variant<NotMonolithData, MonolithData> data_;
-};
-*/
-
 struct Task {
   virtual void Apply(Client&) = 0;
   virtual ~Task() = 0;
@@ -151,8 +54,6 @@ class Client : public std::enable_shared_from_this<Client> {
          boost::asio::ip::tcp::socket socket);
 
   void SetHandlerReceivingMessage(handlers::HandlerReceivingMessage handler);
-  // void SendMessage(const std::string&);
-  // void SendMessage(char* data, uint32_t length);
 
   void PushTask(std::unique_ptr<Task>);
 
@@ -184,7 +85,6 @@ class Client : public std::enable_shared_from_this<Client> {
   boost::asio::io_context& io_context_;
   boost::asio::ip::tcp::socket socket_;
 
-  // std::deque<Message> writing_queue_;
   std::deque<std::unique_ptr<Task>> task_queue;
 
   uint32_t sending_size_;
@@ -192,9 +92,6 @@ class Client : public std::enable_shared_from_this<Client> {
 
   uint32_t reading_size_;
   std::unique_ptr<char[]> reading_message_ = std::make_unique<char[]>(kMaxSizeBody);
-  /*
-  Message reading_;
-   */
 
   handlers::HandlerReceivingMessage handler_receiving_message_;
 

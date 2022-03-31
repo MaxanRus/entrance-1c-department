@@ -12,19 +12,13 @@ using File = bio::mapped_file;
 File file;
 
 void GetMessage(std::weak_ptr<Client> client, std::string message) {
-  LOG(INFO) << "Server recv message: " << message;
+  LOG(INFO) << "Server recv message length: " << message.length();
 
   namespace bio = boost::iostreams;
   file.close();
   file.open(std::string(message.substr(4, message.length() - 4)),
                         boost::iostreams::mapped_file::readonly);
 
-  // std::string test(file.const_data(), file.const_data() + file.size());
-  LOG(INFO) << std::string_view(file.const_data(), file.size());
-
-  // client.lock()->SendMessage(std::to_string(test.length()));
-  // client.lock()->SendMessage(const_cast<char*>(file.const_data()), file.size());
-  // client.lock()->SendMessage(test);
   client.lock()->PushTask(std::make_unique<MessageString>(std::to_string(file.size())));
   client.lock()->PushTask(std::make_unique<MessageData>(file.const_data(), file.size()));
 }
@@ -36,7 +30,15 @@ void NewClient(std::shared_ptr<Client> c) {
   c->Start();
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+  int port = 6666;
+  if (argc != 2) {
+    LOG(INFO) << "Server start on default port " << port;
+  } else {
+    port = std::atoi(argv[1]);
+    LOG(INFO) << "Server start on port" << port;
+
+  }
   el::Loggers::addFlag(el::LoggingFlag::ColoredTerminalOutput);
 
   Server server("0.0.0.0", 6666);
