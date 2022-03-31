@@ -1,22 +1,21 @@
 #include <easylogging++.h>
 
-#include <boost/filesystem.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <chrono>
 #include <server.hpp>
 #include <thread>
+#include <client.hpp>
 
 INITIALIZE_EASYLOGGINGPP
 
 namespace bio = boost::iostreams;
-namespace bfs = boost::filesystem;
 using File = bio::mapped_file;
 
 bio::mapped_file CreateResultFileAndTranslateToMemory(const std::string& path, size_t new_length) {
   bio::mapped_file file;
   bio::mapped_file_params params;
 
-  std::ofstream ofstream(path);
+  std::ofstream ofstream(path); // create file
   ofstream.close();
 
   params.path = path;

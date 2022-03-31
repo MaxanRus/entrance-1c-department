@@ -1,8 +1,8 @@
 #include <easylogging++.h>
 
-#include <boost/filesystem.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <server.hpp>
+#include <client.hpp>
 
 INITIALIZE_EASYLOGGINGPP
 
